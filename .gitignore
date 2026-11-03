@@ -1,0 +1,15 @@
+﻿# 构建产物
+traffic_management_backend/target/
+traffic_management_frontend/traffic-vue/dist/
+traffic_management_frontend/traffic-vue/node_modules/
+
+# IDE
+.idea/
+*.iml
+
+# 临时目录与数据备份
+.buildcheck/
+backup/
+
+# 旧仓库的 .git 备份
+*.git.bak
