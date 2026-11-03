@@ -1,0 +1,31 @@
+/* 全屏地图应用的全局样式。
+   注意：Vite 模板自带的 body/#app 居中、两栏 grid 布局已移除，
+   否则宽屏下页面只会占据左半边。 */
+@import './base.css';
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  overflow: hidden;
+}
+
+#app {
+  /* 覆盖模板可能残留的 grid 布局 */
+  display: block;
+  grid-template-columns: none;
+  font-weight: normal;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+a:hover {
+  background-color: transparent;
+}
