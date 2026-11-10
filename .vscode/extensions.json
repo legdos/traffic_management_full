@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "Vue.volar",
+    "vscjava.vscode-java-pack",
+    "vmware.vscode-spring-boot",
+    "esbenp.prettier-vscode"
+  ]
+}
