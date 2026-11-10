@@ -12,6 +12,7 @@ DARK = RGBColor(0x1F, 0x29, 0x37)
 GRAY = RGBColor(0x6B, 0x72, 0x80)
 BLUE = RGBColor(0x25, 0x63, 0xEB)
 BODY = RGBColor(0x37, 0x41, 0x51)
+ORANGE = RGBColor(0xC2, 0x41, 0x0C)
 
 SECTIONS = [
     ("一、选题与背景", [
@@ -177,6 +178,36 @@ SECTIONS = [
 ]
 
 
+TEMPLATES = [
+    ("完全没准备过 / 没听懂",
+     "这个问题我之前没有专门考虑过。我先按我的理解复述一下：您问的是……？如果理解得不对，请您指正。"
+     "（复述正确后）我现在能回答的是……，更深入的验证还没做。"),
+    ("知道一点，但不确定细节",
+     "这块我只做到能跑通的程度，还没有做严格的验证。目前的实现是……，我印象里是这样，"
+     "如果有出入我回去再核对代码。"),
+    ("确实是短板 / 没做",
+     "这确实是一阶段的一个短板。当时优先把主链路跑通，这部分就没展开；"
+     "如果继续做，我会从……入手，因为它是最影响结果的一环。"),
+    ("被问为什么不用某个技术",
+     "选型时主要权衡了成本和收益：我们规模是……，用现在这套够用且更容易调试。"
+     "如果数据量或并发上到……，我会换成您说的那套，主要收益在……。"),
+    ("被质疑这和普通课设有什么区别",
+     "它不是一个业务管理系统，而是一个可以调参验证策略的仿真平台——同一套代码改几个参数，"
+     "就能对比不同调度策略下的空驶率和等待时长，这是普通 CRUD 做不到的。"),
+    ("被问数据是不是编的",
+     "工厂点位来自高德 POI 检索（工厂、物流园、仓库、产业园），路线来自高德驾车规划，"
+     "这两部分是真的；车辆行为和任务是仿真生成的，这是仿真系统的正常做法。"),
+    ("被问工作量 / 是不是一个人做的",
+     "这个项目是我独立完成的：后端 42 个类约 2100 行、前端 17 个文件约 1500 行、8 张表，"
+     "GitHub 上有完整的提交记录可以查。"),
+    ("被问下一步打算做什么",
+     "二阶段我想做三件事：一是匹配算法加入载重和时效约束；二是对装卸时长、任务概率做敏感性实验；"
+     "三是把前端轮询换成 WebSocket，降低延迟。"),
+    ("现场演示出问题（白屏 / 卡住）",
+     "演示环境这边有点问题，我先切到提前录好的录屏，功能流程是一致的，稍后我再说明是哪一环出的问题。"),
+]
+
+
 def set_run_font(run, size, bold=False, color=DARK):
     run.font.size = Pt(size)
     run.font.bold = bold
@@ -235,6 +266,59 @@ for title, items in SECTIONS:
         set_run_font(r, 10, False, BODY)
 
 out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "答辩问答_50题.docx")
+
+# ---------------- 附录：答不上来时的应对模板 ----------------
+doc.add_page_break()
+
+h = doc.add_paragraph()
+h.paragraph_format.space_before = Pt(0)
+h.paragraph_format.space_after = Pt(4)
+r = h.add_run("附：答不上来时的应对模板")
+set_run_font(r, 18, True, ORANGE)
+
+p = doc.add_paragraph()
+r = p.add_run("被问到不会的，不要硬编。用下面的四步：承认 → 说现状 → 给证据 → 给下一步。")
+set_run_font(r, 10.5, False, BODY)
+
+steps = [
+    ("① 承认", "「这个问题我没深入考虑过」——不装懂，比说错更安全"),
+    ("② 说现状", "「目前我只做到……，实现方式是……」——把话题拉回你会的部分"),
+    ("③ 给证据", "「数据库里是……」「代码在……」「实测是……」——用具体数字接住"),
+    ("④ 给下一步", "「如果继续做，我会从……入手」——表明你知道该往哪走"),
+]
+for head, body in steps:
+    sp = doc.add_paragraph()
+    sp.paragraph_format.left_indent = Pt(14)
+    sp.paragraph_format.space_before = Pt(2)
+    r = sp.add_run(f"{head}　")
+    set_run_font(r, 10, True, ORANGE)
+    r = sp.add_run(body)
+    set_run_font(r, 10, False, BODY)
+
+p = doc.add_paragraph()
+p.paragraph_format.space_before = Pt(10)
+r = p.add_run("三条禁忌：不要编造数字；不要说「这个不重要」；不要和老师争辩对错。")
+set_run_font(r, 10, True, RGBColor(0xB9, 0x1C, 0x1C))
+
+h = doc.add_paragraph()
+h.paragraph_format.space_before = Pt(16)
+h.paragraph_format.space_after = Pt(4)
+r = h.add_run("按场景套用")
+set_run_font(r, 13, True, ORANGE)
+
+for i, (scene, tpl) in enumerate(TEMPLATES, start=1):
+    qp = doc.add_paragraph()
+    qp.paragraph_format.space_before = Pt(8)
+    qp.paragraph_format.space_after = Pt(2)
+    r = qp.add_run(f"T{i}.  {scene}")
+    set_run_font(r, 10.5, True, DARK)
+
+    ap = doc.add_paragraph()
+    ap.paragraph_format.left_indent = Pt(14)
+    ap.paragraph_format.line_spacing = 1.35
+    r = ap.add_run(tpl)
+    set_run_font(r, 10, False, BODY)
+
 doc.save(out)
 print("saved:", out)
-print("questions:", index)
+print("questions:", index, "templates:", len(TEMPLATES))
