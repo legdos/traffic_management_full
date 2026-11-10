@@ -104,6 +104,8 @@ const pickupPaths = new Map()
 const legLines = new Map()
 let rafId = null
 let lastFrame = 0
+/** 接单段规划失败后的冷却：key(车辆:任务) -> 下次可重试的时间戳 */
+const pickupRetryAt = new Map()
 /** 路线折线缓存：routeId -> [[lng,lat],...] */
 const routeCache = new Map()
 /** 正在请求中的路线，避免同一路线并发重复请求 */
@@ -492,7 +494,11 @@ function planPickupRoutes(vehicles, missions) {
       return
     }
     const key = `${v.id}:${mission.id}`
-    if (pickupPlanned.has(key)) {
+    if (pickupPaths.has(key) || pickupPlanned.has(key)) {
+      return
+    }
+    // 上次失败还在冷却，或被并发上限挡住，下一轮再来
+    if (Date.now() < (pickupRetryAt.get(key) || 0) || planningCount >= MAX_PLANNING) {
       return
     }
     const from = { lng: Number(v.currentLongitude), lat: Number(v.currentLatitude) }
@@ -500,15 +506,25 @@ function planPickupRoutes(vehicles, missions) {
       return
     }
     pickupPlanned.add(key)
+    planningCount++
     planRoute(from, target)
       .then((points) => {
         if (points && points.length > 1) {
           pickupPaths.set(key, points)
           return updatePickupPoints(v.id, mission.id, points)
         }
+        // 规划失败：释放标记并进入冷却，避免整段行程都画成直线
+        pickupPlanned.delete(key)
+        pickupRetryAt.set(key, Date.now() + ROUTE_RETRY_MS)
         return null
       })
-      .catch(() => {})
+      .catch(() => {
+        pickupPlanned.delete(key)
+        pickupRetryAt.set(key, Date.now() + ROUTE_RETRY_MS)
+      })
+      .finally(() => {
+        planningCount--
+      })
   })
 }
 
