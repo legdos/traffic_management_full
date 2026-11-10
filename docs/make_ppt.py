@@ -21,6 +21,7 @@ GRAY = RGBColor(0x6B, 0x72, 0x80)
 LIGHT = RGBColor(0xF3, 0xF4, 0xF6)
 SOFT = RGBColor(0xEF, 0xF6, 0xFF)
 BLUE = RGBColor(0x25, 0x63, 0xEB)
+RED = RGBColor(0xDC, 0x26, 0x26)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 
 
@@ -90,29 +91,29 @@ def new_slide(prs, title, page):
 
 
 def make_compare_image(path):
+    """两个方案横向对比：左＝两点线性插值（走弦），右＝沿折线弧长插值（贴线）。"""
     W, H = 1800, 640
     img = Image.new("RGB", (W, H), "white")
     d = ImageDraw.Draw(img)
     try:
-        f_title = ImageFont.truetype(r"C:\Windows\Fonts\msyh.ttc", 28)
+        f_title = ImageFont.truetype(r"C:\Windows\Fonts\msyh.ttc", 30)
+        f_note = ImageFont.truetype(r"C:\Windows\Fonts\msyh.ttc", 22)
     except Exception:
         f_title = ImageFont.load_default()
+        f_note = f_title
 
     GREY = (229, 231, 235)
     RED = (220, 38, 38)
     BLUE = (37, 99, 235)
     LIGHT_BLUE = (147, 197, 253)
 
-    PANELS = [(50, "两点直线"), (650, "按比例插值（切角）"), (1250, "按弧长插值（贴线）")]
-    y0, y1 = 110, 570
+    def panel(x0, title, sub):
+        d.text((x0, 26), title, font=f_title, fill=(17, 24, 39))
+        d.text((x0, 70), sub, font=f_note, fill=(107, 114, 128))
 
-    for x0, title in PANELS:
-        d.text((x0, 42), title, font=f_title, fill=(17, 24, 39))
-
-        # 建筑块 3x3，留出四周道路
-        bx0, bx1 = x0 + 20, x0 + 500
-        by0, by1 = y0 + 30, y1 - 30
-        gap = 22
+        bx0, bx1 = x0 + 20, x0 + 700
+        by0, by1 = 130, 560
+        gap = 24
         bw = (bx1 - bx0 - gap * 2) / 3
         bh = (by1 - by0 - gap * 2) / 3
         for r in range(3):
@@ -121,39 +122,76 @@ def make_compare_image(path):
                 by = by0 + r * (bh + gap)
                 d.rounded_rectangle([bx, by, bx + bw, by + bh], radius=10, fill=GREY)
 
-        if title == "两点直线":
-            d.line([(x0 + 40, y1 - 40), (x0 + 490, y0 + 50)], fill=RED, width=7)
-            continue
-
         gx1 = bx0 + bw + gap / 2
         gx2 = bx0 + 2 * (bw + gap) + gap / 2
         gy1 = by0 + bh + gap / 2
         gy2 = by0 + 2 * (bh + gap) + gap / 2
         route = [
-            (x0 + 28, y1 - 12),
-            (gx1, y1 - 12),
+            (x0 + 40, by1 - 18),
+            (gx1, by1 - 18),
             (gx1, gy2),
             (gx2, gy2),
             (gx2, gy1),
-            (x0 + 512, gy1),
-            (x0 + 512, y0 + 18),
+            (bx1 - 12, gy1),
+            (bx1 - 12, by0 - 30),
         ]
+        return route
 
-        if title == "按比例插值（切角）":
-            d.line(route, fill=LIGHT_BLUE, width=6, joint="curve")
-            # 拐角处按两点比例走，于是斜切过去
-            for i in (2, 4):
-                px, py = route[i]
-                prev = route[i - 1]
-                nxt = route[i + 1]
-                a = ((px + prev[0]) / 2, (py + prev[1]) / 2)
-                b = ((px + nxt[0]) / 2, (py + nxt[1]) / 2)
-                d.line([a, b], fill=RED, width=7)
-        else:
-            d.line(route, fill=BLUE, width=7, joint="curve")
+    def dashed(draw, pts, color, width=5, dash=18, gap=14):
+        import math
+        for i in range(len(pts) - 1):
+            x1, y1 = pts[i]
+            x2, y2 = pts[i + 1]
+            dx, dy = x2 - x1, y2 - y1
+            L = math.hypot(dx, dy)
+            if L == 0:
+                continue
+            ux, uy = dx / L, dy / L
+            t = 0.0
+            while t < L:
+                e = min(t + dash, L)
+                draw.line([(x1 + ux * t, y1 + uy * t), (x1 + ux * e, y1 + uy * e)],
+                          fill=color, width=width)
+                t = e + gap
 
-        for pt in [route[0], route[-1]]:
-            d.ellipse([pt[0] - 8, pt[1] - 8, pt[0] + 8, pt[1] + 8], fill=BLUE)
+    def closest_on(route, p):
+        import math
+        best = (1e18, route[0])
+        for i in range(len(route) - 1):
+            ax, ay = route[i]
+            bx, by = route[i + 1]
+            vx, vy = bx - ax, by - ay
+            L2 = vx * vx + vy * vy
+            t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((p[0] - ax) * vx + (p[1] - ay) * vy) / L2))
+            q = (ax + vx * t, ay + vy * t)
+            dist = math.hypot(p[0] - q[0], p[1] - q[1])
+            if dist < best[0]:
+                best = (dist, q)
+        return best
+
+    # 左：旧方案
+    route = panel(60, "旧：两点线性插值", "进度按两点之间的比例推进")
+    dashed(d, route, LIGHT_BLUE, width=5)
+    d.line([route[0], route[-1]], fill=RED, width=8)
+    d.ellipse([route[0][0]-9, route[0][1]-9, route[0][0]+9, route[0][1]+9], fill=RED)
+    d.ellipse([route[-1][0]-9, route[-1][1]-9, route[-1][0]+9, route[-1][1]+9], fill=RED)
+    # 偏差标注：弦的中点画到折线最近点
+    mx = (route[0][0] + route[-1][0]) / 2
+    my = (route[0][1] + route[-1][1]) / 2
+    _, q = closest_on(route, (mx, my))
+    dashed(d, [(mx, my), q], (156, 163, 175), width=3, dash=10, gap=8)
+    d.text((mx + 14, my - 6), "最大偏差", font=f_note, fill=(220, 38, 38))
+    d.text((mx + 14, my + 26), "6.7 km", font=f_note, fill=(220, 38, 38))
+
+    # 右：新方案
+    route2 = panel(1000, "新：沿折线弧长插值", "进度按已走公里数推进")
+    d.line(route2, fill=BLUE, width=8, joint="curve")
+    for pt in [route2[0], route2[-1]]:
+        d.ellipse([pt[0]-9, pt[1]-9, pt[0]+9, pt[1]+9], fill=BLUE)
+
+    # 底部结论
+    d.text((60, 592), "同一条路线、同一个起终点：左边每一段都走弦，右边每一段都贴线",
+           font=f_note, fill=(107, 114, 128))
 
     img.save(path, "PNG")
 
@@ -364,27 +402,21 @@ text(s, 1.25, 4.72, 10.9, 1.0,
 
 text(s, 0.9, 6.05, 11.5, 0.4, "→ 一车一单、一单只被抢一次", size=14, bold=True, color=DARK)
 
-# 6 真实路网
+# 7 真实路网（两种插值方案对比）
 img_path = os.path.join(ASSETS, "route-compare.png")
 make_compare_image(img_path)
-s = new_slide(prs, "车怎么动：投影 → 弧长 → 反算坐标", 7)
-s.shapes.add_picture(img_path, Inches(0.9), Inches(1.72), width=Inches(8.2))
+s = new_slide(prs, "车怎么动：两种插值方案对比", 7)
+s.shapes.add_picture(img_path, Inches(0.9), Inches(1.66), width=Inches(11.4))
 
-map_path = os.path.join(ASSETS, "map-real.png")
-if os.path.exists(map_path):
-    s.shapes.add_picture(map_path, Inches(9.35), Inches(1.72), width=Inches(3.3))
-    text(s, 9.35, 4.1, 3.3, 0.3, "成都真实路网（高德）", size=9, color=GRAY, align=PP_ALIGN.CENTER)
+text(s, 0.95, 5.76, 5.4, 0.3, "旧：p = (1 - t)·A + t·B", size=12, bold=True, color=RED)
+text(s, 0.95, 6.06, 5.4, 0.3, "t 是两点之间的比例，拐弯处被拉直、走弦", size=10, color=GRAY)
 
-text(s, 0.9, 4.95, 3.6, 1.0, "① 投影\n车辆坐标投到折线，得到已走弧长 s", size=12, spacing=1.3)
-text(s, 4.85, 4.95, 3.9, 1.0, "② 前进\ns + 5km（60km/h × 5 分钟）", size=12, spacing=1.3)
-text(s, 8.9, 4.95, 3.9, 1.0, "③ 反算\n取 s 对应的坐标；越过终点直接吸附", size=12, spacing=1.3)
+text(s, 6.95, 5.76, 5.4, 0.3, "新：s = 投影弧长，p = pointAt(s + 5km)", size=12, bold=True, color=BLUE)
+text(s, 6.95, 6.06, 5.4, 0.3, "进度是公里数，每个采样点都落在折线上", size=10, color=GRAY)
 
-text(s, 0.9, 6.18, 11.9, 0.4,
-     "进度 = 沿折线走了多少公里，而不是两点之间的比例",
-     size=17, bold=True, color=BLUE, align=PP_ALIGN.CENTER)
-text(s, 0.9, 6.58, 11.9, 0.3,
-     "20.7km 直角折线：11 个采样点距折线 0.000km；按比例插值的中点偏出 6.7km",
-     size=11, color=GRAY, align=PP_ALIGN.CENTER)
+text(s, 0.9, 6.42, 11.6, 0.35,
+     "20.7km 直角折线：旧方案中点偏出 6.7km，新方案 11 个采样点距折线 0.000km",
+     size=12, bold=True, color=DARK, align=PP_ALIGN.CENTER)
 
 # 7 验证
 s = new_slide(prs, "验证：一致性 + 性能", 8)
