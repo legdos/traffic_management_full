@@ -1,5 +1,6 @@
-﻿# 构建产物
+# 构建产物
 traffic_management_backend/target/
+traffic_management_backend/src/main/resources/static/
 traffic_management_frontend/traffic-vue/dist/
 traffic_management_frontend/traffic-vue/node_modules/
 

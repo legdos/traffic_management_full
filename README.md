@@ -286,7 +286,38 @@ npm run dev      # http://localhost:5173
   `待接单` 必无车辆、`进行中` 必有车辆、无悬空 `car_id`。抢单使用
   `UPDATE ... WHERE status='待接单'` 条件更新，保证一车一单。
 
-## 九、常见问题
+## 九、单进程部署（答辩 / 演示用）
+
+开发时是「前端 5173 + 后端 8080 + Vite 代理」两个进程；演示时可以把前端打包进后端，只启动一个进程：
+
+```powershell
+# 一键：构建前端 + 拷贝产物到后端 static 目录
+.\build-web.cmd
+```
+
+等价于手动执行：
+
+```powershell
+cd traffic_management_frontend\traffic-vue
+npm run build
+# 然后把 dist\* 全部拷贝到：
+#   traffic_management_backend\src\main\resources\static\
+```
+
+之后**只启动 Spring Boot**，浏览器打开 <http://localhost:8080> 就是完整应用：
+
+- 没有 5173、没有 Vite 代理、没有跨域；
+- 前端请求仍是 `/sim/state` 这类相对路径，同源天然成立；
+- 需要启动的进程从 2 个降到 1 个，现场演示更不容易出岔子。
+
+| 注意事项 | 说明 |
+| --- | --- |
+| `static/` 目录 | 已在 `.gitignore` 中，构建产物不提交仓库 |
+| 前端改动后 | 重新执行一次 `.\build-web.cmd`，否则页面还是旧的 |
+| 脚本被系统拦截 | Windows 默认执行策略 `RemoteSigned` 会拒绝运行 `.ps1`；`build-web.cmd` 内部用 `-ExecutionPolicy Bypass` 调起，双击即可 |
+| 地图仍需外网 | 高德 JS API 与路径规划都要联网，演示前先打开页面预热，并准备录屏兜底 |
+
+## 十、常见问题
 
 - **前端请求 404 / 500**：先确认后端是否在 8080 启动，且终端里 `TrafficManagementApplication` 无异常。
 - **后端启动报 `Communications link failure`**：MySQL 没启动，或端口不是 3306；到 XAMPP 面板点 Start。
