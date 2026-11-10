@@ -108,6 +108,14 @@ let lastFrame = 0
 const routeCache = new Map()
 /** 正在请求中的路线，避免同一路线并发重复请求 */
 const routeLoading = new Map()
+/** 只拿到合成折线、还需要重新规划真实道路的路线 */
+const routeNeedsPlan = new Set()
+/** 规划失败后的冷却时间：routeId -> 下次可重试的时间戳 */
+const routeRetryAt = new Map()
+/** 同时在飞的规划请求数，避免触发高德 QPS 限制 */
+let planningCount = 0
+const MAX_PLANNING = 2
+const ROUTE_RETRY_MS = 15000
 
 onMounted(async () => {
   window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_CODE }
@@ -586,11 +594,22 @@ function renderLegs(vehicles, missions) {
  * 这样后续所有走这条线的车辆都会贴着真实道路行驶。
  */
 function ensureRouteGeometry(routeId, from, to) {
-  if (routeCache.has(routeId)) {
-    return Promise.resolve(routeCache.get(routeId))
+  const cached = routeCache.get(routeId)
+  const needsPlan = routeNeedsPlan.has(routeId)
+  // 已经是真实路线，直接用
+  if (cached && !needsPlan) {
+    return Promise.resolve(cached)
+  }
+  // 合成折线占位中，且还在冷却期
+  if (cached && Date.now() < (routeRetryAt.get(routeId) || 0)) {
+    return Promise.resolve(cached)
   }
   if (routeLoading.has(routeId)) {
     return routeLoading.get(routeId)
+  }
+  // 并发上限：这一轮先不排，下一轮继续（避免触发高德 QPS 限制）
+  if (planningCount >= MAX_PLANNING) {
+    return Promise.resolve(cached || null)
   }
 
   const task = (async () => {
@@ -599,22 +618,38 @@ function ensureRouteGeometry(routeId, from, to) {
       if (detail && detail.roadType === NAVIGATION_ROAD_TYPE) {
         const points = await fetchRoutePoints(routeId).catch(() => [])
         routeCache.set(routeId, points)
+        routeNeedsPlan.delete(routeId)
+        routeRetryAt.delete(routeId)
         return points
       }
 
-      const planned = await planRoute(from, to)
+      planningCount++
+      let planned = null
+      try {
+        planned = await planRoute(from, to)
+      } finally {
+        planningCount--
+      }
+
       if (planned && planned.length > 1) {
         try {
           await updateRoutePoints(routeId, planned)
-          routeCache.set(routeId, planned)
-          return planned
         } catch (e) {
-          // 回写失败就退回到后端已有的合成折线
+          // 回写失败就先本地用，下一轮会再次尝试
         }
+        routeCache.set(routeId, planned)
+        routeNeedsPlan.delete(routeId)
+        routeRetryAt.delete(routeId)
+        return planned
       }
 
+      // 规划失败：先用后端已有的合成折线占位，冷却后重试，不要把失败结果长期缓存
       const fallback = await fetchRoutePoints(routeId).catch(() => [])
-      routeCache.set(routeId, fallback)
+      if (fallback.length > 1) {
+        routeCache.set(routeId, fallback)
+      }
+      routeNeedsPlan.add(routeId)
+      routeRetryAt.set(routeId, Date.now() + ROUTE_RETRY_MS)
       return fallback.length > 1 ? fallback : null
     } finally {
       routeLoading.delete(routeId)
@@ -702,8 +737,8 @@ async function importFactoriesFromAmap() {
   notice.value = ''
   try {
     const items = new Map()
-    // 覆盖成都及周边城市（四川主要城市），配合后端 sim.min-factory-distance-km 过滤，只保留足够远的点
-    const cities = ['成都', '德阳', '眉山', '资阳', '绵阳', '乐山', '内江', '遂宁', '自贡', '南充']
+    // 覆盖成都及周边四个市（演示范围），配合后端 sim.min-factory-distance-km 过滤，只保留足够远的点
+    const cities = ['成都', '德阳', '眉山', '资阳']
     const keywords = ['工厂', '物流园', '仓库', '产业园']
 
     for (const city of cities) {
