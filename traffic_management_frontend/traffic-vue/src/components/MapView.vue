@@ -693,7 +693,7 @@ async function resetAndStart() {
   }
 }
 
-/** 用高德 POI 检索抓取成都的真实工厂/园区坐标，导入后端 */
+/** 用高德 POI 检索抓取真实工厂/园区坐标，导入后端（后端按最小间距过滤） */
 async function importFactoriesFromAmap() {
   if (!AMap || importing.value) {
     return
@@ -702,44 +702,50 @@ async function importFactoriesFromAmap() {
   notice.value = ''
   try {
     const items = new Map()
+    // 覆盖成都及周边城市（四川主要城市），配合后端 sim.min-factory-distance-km 过滤，只保留足够远的点
+    const cities = ['成都', '德阳', '眉山', '资阳', '绵阳', '乐山', '内江', '遂宁', '自贡', '南充']
     const keywords = ['工厂', '物流园', '仓库', '产业园']
-    const search = new AMap.PlaceSearch({ city: '成都', citylimit: true, pageSize: 50, extensions: 'base' })
 
-    // JS API 2.0 的 PlaceSearch 没有 gotoPage，翻页要先 setPageIndex 再 search
-    const pageable = typeof search.setPageIndex === 'function'
-    const pages = pageable ? 4 : 1
+    for (const city of cities) {
+      const search = new AMap.PlaceSearch({ city, citylimit: true, pageSize: 50, extensions: 'base' })
+      // JS API 2.0 的 PlaceSearch 没有 gotoPage，翻页要先 setPageIndex 再 search
+      const pageable = typeof search.setPageIndex === 'function'
+      const pages = pageable ? 2 : 1
 
-    for (const keyword of keywords) {
-      for (let page = 1; page <= pages; page++) {
-        if (page > 1) {
-          search.setPageIndex(page)
-        }
-        const result = await new Promise((resolve) => {
-          const handler = (status, res) => resolve(status === 'complete' ? res : null)
-          search.search(keyword, handler)
-        })
-        const pois = (result && result.poiList && result.poiList.pois) || []
-        if (!pois.length) {
-          break
-        }
-        pois.forEach((p) => {
-          const lng = p.location && p.location.lng
-          const lat = p.location && p.location.lat
-          if (!lng || !lat || !p.name) {
-            return
+      for (const keyword of keywords) {
+        for (let page = 1; page <= pages; page++) {
+          if (page > 1) {
+            search.setPageIndex(page)
           }
-          const key = `${p.name}@${lng.toFixed(4)},${lat.toFixed(4)}`
-          if (items.has(key)) {
-            return
-          }
-          items.set(key, {
-            factoryName: String(p.name).slice(0, 50),
-            address: String(p.address || '').slice(0, 100),
-            phone: String(p.tel || '').slice(0, 20),
-            factoryLongitude: lng,
-            factoryLatitude: lat,
+          const result = await new Promise((resolve) => {
+            const handler = (status, res) => resolve(status === 'complete' ? res : null)
+            search.search(keyword, handler)
           })
-        })
+          // 轻微间隔，避免触发高德 QPS 限制
+          await new Promise((r) => setTimeout(r, 120))
+          const pois = (result && result.poiList && result.poiList.pois) || []
+          if (!pois.length) {
+            break
+          }
+          pois.forEach((p) => {
+            const lng = p.location && p.location.lng
+            const lat = p.location && p.location.lat
+            if (!lng || !lat || !p.name) {
+              return
+            }
+            const key = `${p.name}@${lng.toFixed(4)},${lat.toFixed(4)}`
+            if (items.has(key)) {
+              return
+            }
+            items.set(key, {
+              factoryName: String(p.name).slice(0, 50),
+              address: String(p.address || '').slice(0, 100),
+              phone: String(p.tel || '').slice(0, 20),
+              factoryLongitude: lng,
+              factoryLatitude: lat,
+            })
+          })
+        }
       }
     }
 
@@ -754,7 +760,7 @@ async function importFactoriesFromAmap() {
       body: JSON.stringify(list),
     })
     const text = await response.text()
-    notice.value = `${text}（检索到 ${list.length} 个点位）`
+    notice.value = `${text}（${cities.join('/')} 共检索到 ${list.length} 个点位）`
     await reloadFactories()
   } catch (e) {
     notice.value = `抓取失败：${e.message}`

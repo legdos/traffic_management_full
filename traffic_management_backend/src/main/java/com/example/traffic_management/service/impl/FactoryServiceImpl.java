@@ -1,14 +1,17 @@
 package com.example.traffic_management.service.impl;
 
+import com.example.traffic_management.config.SimProperties;
 import com.example.traffic_management.entity.Factory;
 import com.example.traffic_management.entity.Need;
 import com.example.traffic_management.mapper.FactoryMapper;
 import com.example.traffic_management.mapper.NeedMapper;
 import com.example.traffic_management.service.FactoryService;
+import com.example.traffic_management.util.GeoUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -21,6 +24,9 @@ public class FactoryServiceImpl implements FactoryService {
 
     @Autowired
     private NeedMapper needMapper;
+
+    @Autowired
+    private SimProperties simProperties;
 
     @Override
     public Factory findById(Integer id) {
@@ -74,6 +80,9 @@ public class FactoryServiceImpl implements FactoryService {
         if (factories == null || factories.isEmpty()) {
             return 0;
         }
+        // 已有工厂坐标作为参考点；新导入的也会加进来，保证批量导入内部同样满足间距
+        List<Factory> existing = new ArrayList<>(factoryMapper.selectAll());
+        double minKm = simProperties.getMinFactoryDistanceKm();
         int added = 0;
         for (Factory factory : factories) {
             if (factory.getFactoryName() == null || factory.getFactoryName().isBlank()
@@ -85,11 +94,30 @@ public class FactoryServiceImpl implements FactoryService {
                     factory.getFactoryLatitude(), factory.getFactoryLongitude()) > 0) {
                 continue;
             }
+            // 与已有工厂的最小间距不足则跳过，避免点位挤在一起
+            if (minKm > 0 && !isFarEnough(existing, factory, minKm)) {
+                continue;
+            }
             factory.setId(null);
             factory.setCreateTime(new Date());
             factoryMapper.insert(factory);
+            existing.add(factory);
             added++;
         }
         return added;
+    }
+
+    private boolean isFarEnough(List<Factory> existing, Factory candidate, double minKm) {
+        double lat = candidate.getFactoryLatitude();
+        double lng = candidate.getFactoryLongitude();
+        for (Factory f : existing) {
+            if (f.getFactoryLatitude() == null || f.getFactoryLongitude() == null) {
+                continue;
+            }
+            if (GeoUtil.distanceKm(f.getFactoryLatitude(), f.getFactoryLongitude(), lat, lng) < minKm) {
+                return false;
+            }
+        }
+        return true;
     }
 }

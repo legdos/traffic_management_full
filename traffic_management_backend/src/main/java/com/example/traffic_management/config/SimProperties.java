@@ -37,6 +37,9 @@ public class SimProperties {
     /** 每轮最多新增多少条任务（实际按"空闲车辆数 - 待接单数"的缺口生成） */
     private int tasksPerTick = 5;
 
+    /** 导入工厂时与已有工厂的最小间距（km），避免点位挤在一起；0 表示不限制 */
+    private double minFactoryDistanceKm = 12.0;
+
     /**
      * 高德「Web服务」类型 key（不是 JS API key）。
      * 留空时路线由 PolylineUtil 合成；填入后自动切换为真实道路。
@@ -113,6 +116,14 @@ public class SimProperties {
 
     public void setTasksPerTick(int tasksPerTick) {
         this.tasksPerTick = tasksPerTick;
+    }
+
+    public double getMinFactoryDistanceKm() {
+        return minFactoryDistanceKm;
+    }
+
+    public void setMinFactoryDistanceKm(double minFactoryDistanceKm) {
+        this.minFactoryDistanceKm = minFactoryDistanceKm;
     }
 
     public String getAmapWebKey() {

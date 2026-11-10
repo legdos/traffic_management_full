@@ -24,21 +24,25 @@ BLUE = RGBColor(0x25, 0x63, 0xEB)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 
 
-def style_run(run, size, bold=False, color=DARK):
+def style_run(run, size, bold=False, color=DARK, ascii_font=None):
     run.font.size = Pt(size)
     run.font.bold = bold
     run.font.color.rgb = color
-    run.font.name = FONT
+    run.font.name = ascii_font or FONT
     rPr = run._r.get_or_add_rPr()
     ea = rPr.find(qn("a:ea"))
     if ea is None:
         ea = rPr.makeelement(qn("a:ea"), {})
         rPr.append(ea)
     ea.set("typeface", FONT)
+    latin = rPr.find(qn("a:latin"))
+    if latin is not None:
+        latin.set("typeface", ascii_font or FONT)
 
 
 def text(slide, left, top, width, height, content, size=18, bold=False,
-         color=DARK, align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP, spacing=1.15):
+         color=DARK, align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP, spacing=1.15,
+         ascii_font=None):
     box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
     tf = box.text_frame
     tf.word_wrap = True
@@ -53,7 +57,7 @@ def text(slide, left, top, width, height, content, size=18, bold=False,
         p.line_spacing = spacing
         r = p.add_run()
         r.text = line
-        style_run(r, size, bold, color)
+        style_run(r, size, bold, color, ascii_font)
     return box
 
 
@@ -198,10 +202,10 @@ text(s, 2.72, 2.66, 1.2, 0.3, "HTTPS", size=9, color=GRAY)
 # 浏览器 / 前端
 rect(s, 0.9, 3.0, 3.4, 1.9, fill=WHITE, line=BOX_LINE)
 text(s, 1.15, 3.12, 3.0, 0.35, "浏览器（前端）", size=16, bold=True)
-text(s, 1.15, 3.55, 3.0, 0.3, "Vue 3 + Vite（5173）", size=12, color=DARK)
-text(s, 1.15, 3.88, 3.0, 0.3, "GIS：高德 JS API", size=12, color=DARK)
-text(s, 1.15, 4.21, 3.0, 0.3, "*.html / 静态资源", size=12, color=GRAY)
-text(s, 1.15, 4.55, 3.0, 0.28, "开发期 5173 · 演示时打包进 8080", size=9, color=GRAY)
+text(s, 1.15, 3.55, 3.05, 0.3, "Vue 3 + Vite + 高德 JS API", size=12, color=DARK)
+text(s, 1.15, 3.9, 3.05, 0.3, "① 开发期：Vite 5173（代理 → 8080）", size=10.5, color=GRAY)
+text(s, 1.15, 4.2, 3.05, 0.3, "② 演示：打包进后端，同源 8080", size=10.5, color=GRAY)
+text(s, 1.15, 4.55, 3.05, 0.28, "*.html / 静态资源", size=9.5, color=GRAY)
 
 # 箭头 1
 text(s, 4.32, 3.72, 0.76, 0.45, "→", size=20, color=GRAY, align=PP_ALIGN.CENTER)
@@ -233,12 +237,67 @@ for c in chips:
     text(s, x, 5.55, 3.5, 0.35, c, size=15, bold=True, color=BLUE, align=PP_ALIGN.CENTER)
     x += 3.85
 
-text(s, 0.9, 6.2, 11.5, 0.3, "前端 1 秒轮询  ·  后端 5 秒推进一步  ·  全部落库", size=12, color=GRAY)
-text(s, 0.9, 6.55, 11.5, 0.3, "后端 42 个类 / 2133 行  ·  前端 17 个文件 / 1570 行  ·  8 张表",
-     size=11, color=GRAY)
+text(s, 0.9, 6.1, 11.5, 0.3, "10 辆车  ·  88 家工厂  ·  4 个城市（成都 / 德阳 / 眉山 / 资阳）", size=12, color=DARK)
+text(s, 0.9, 6.45, 11.5, 0.28, "前端 1 秒轮询 · 后端 5 秒推进一步 · 全部落库  |  后端 42 个类 / 2133 行 · 前端 17 个文件 / 1570 行 · 8 张表",
+     size=10, color=GRAY)
 
-# 4 状态机
-s = new_slide(prs, "车辆状态：概率转移，不是固定链路", 4)
+# 4 运行逻辑
+s = new_slide(prs, "运行逻辑：一个仿真线程 + while 主循环", 4)
+text(s, 0.9, 1.68, 6.0, 0.28, "SimulationService.java（节选）", size=9, color=GRAY)
+rect(s, 0.9, 1.98, 7.5, 4.2, fill=RGBColor(0x1F, 0x29, 0x37))
+code = (
+    "private void runLoop() {\n"
+    "    while (running) {\n"
+    "        try {\n"
+    "            tickOnce();\n"
+    "        } catch (Exception e) {\n"
+    "            log.error(\"第 {} 轮执行异常\", tick + 1, e);\n"
+    "        }\n"
+    "        try {\n"
+    "            Thread.sleep(props.getTickSeconds() * 1000L);\n"
+    "        } catch (InterruptedException e) {\n"
+    "            Thread.currentThread().interrupt();\n"
+    "            break;\n"
+    "        }\n"
+    "    }\n"
+    "    running = false;\n"
+    "}\n"
+    "\n"
+    "public void tickOnce() {\n"
+    "    transactionTemplate.executeWithoutResult(st -> doTick());\n"
+    "}\n"
+    "\n"
+    "private synchronized void doTick() {\n"
+    "    tick++;\n"
+    "    simMinutes += props.getMinutesPerTick();\n"
+    "    List<Vehicle> vehicles = vehicleMapper.selectAllNotDeleted();\n"
+    "    generateMissions(vehicles);"
+)
+text(s, 1.15, 2.06, 7.05, 4.0, code, size=8.5,
+     color=RGBColor(0xE5, 0xE7, 0xEB), spacing=1.1, ascii_font="Consolas")
+
+bullets = [
+    ("单线程推进", "start() 里只 new 一个 sim-loop 线程，串行改车辆"),
+    ("整轮一个事务", "tickOnce() 用 TransactionTemplate 包住 doTick()"),
+    ("可随时暂停", "running=false + interrupt()，立即打断 sleep"),
+    ("异常隔离", "单轮失败只记日志，循环不退出"),
+]
+y = 1.85
+for head, body in bullets:
+    rect(s, 8.65, y + 0.06, 0.09, 0.42, fill=BLUE, shape=MSO_SHAPE.RECTANGLE)
+    text(s, 8.9, y, 3.8, 0.35, head, size=13, bold=True)
+    text(s, 8.9, y + 0.32, 3.85, 0.3, body, size=9.5, color=GRAY)
+    y += 1.05
+
+text(s, 0.9, 6.28, 11.6, 0.3,
+     "退出循环：stop() 置 running=false 并 interrupt() → sleep 抛异常 → break → 线程结束",
+     size=9.5, color=GRAY)
+text(s, 0.9, 6.56, 11.6, 0.3,
+     "reset()：停线程 + 清空任务 + 车辆停回工厂点位  |  一轮 5 秒 = 仿真 5 分钟",
+     size=9.5, color=GRAY)
+
+# 5 状态机
+s = new_slide(prs, "车辆状态：概率转移，不是固定链路", 5)
 text(s, 0.9, 1.95, 4.0, 0.5, "6 个状态 · 36 个转移概率", size=18, bold=True)
 text(s, 0.9, 2.55, 4.2, 1.5,
      "抽样：随机取 1~100，按行概率累加落区间", size=13, color=GRAY, spacing=1.5)
@@ -246,6 +305,7 @@ text(s, 0.9, 3.45, 4.3, 1.8,
      "例：接单行驶这一行\n1~5 继续接单\n6~95 转装货\n96~100 转等待",
      size=13, color=DARK, spacing=1.5)
 text(s, 0.9, 5.45, 4.2, 0.6, "矩阵只决定状态，\n接哪一单交给下一层。", size=13, bold=True, color=BLUE, spacing=1.4)
+text(s, 4.6, 5.55, 8.0, 0.3, "统一车速 60 km/h：1 km = 1 分钟；一轮 5 秒 = 仿真 5 分钟", size=11, color=GRAY)
 
 header = ["从 \\ 到", "接单行驶", "装货", "运货行驶", "卸货", "停留等待", "空闲"]
 rows = [
@@ -289,7 +349,7 @@ for i, row in enumerate(rows, start=1):
         cell.fill.fore_color.rgb = SOFT if i == 1 else WHITE
 
 # 5 任务与抢单
-s = new_slide(prs, "任务怎么来，车怎么抢", 5)
+s = new_slide(prs, "任务怎么来，车怎么抢", 6)
 text(s, 0.9, 1.95, 11.5, 0.4, "按缺口供给，避免车多把任务抢空", size=15, color=GRAY)
 rect(s, 0.9, 2.55, 11.5, 1.0, fill=SOFT)
 text(s, 0.9, 2.78, 11.5, 0.5,
@@ -307,7 +367,7 @@ text(s, 0.9, 6.05, 11.5, 0.4, "→ 一车一单、一单只被抢一次", size=1
 # 6 真实路网
 img_path = os.path.join(ASSETS, "route-compare.png")
 make_compare_image(img_path)
-s = new_slide(prs, "车怎么动：投影 → 弧长 → 反算坐标", 6)
+s = new_slide(prs, "车怎么动：投影 → 弧长 → 反算坐标", 7)
 s.shapes.add_picture(img_path, Inches(0.9), Inches(1.72), width=Inches(8.2))
 
 map_path = os.path.join(ASSETS, "map-real.png")
@@ -327,20 +387,20 @@ text(s, 0.9, 6.58, 11.9, 0.3,
      size=11, color=GRAY, align=PP_ALIGN.CENTER)
 
 # 7 验证
-s = new_slide(prs, "验证：一致性 + 性能", 7)
+s = new_slide(prs, "验证：一致性 + 性能", 8)
 rect(s, 0.9, 2.0, 5.5, 2.5, fill=LIGHT)
 text(s, 1.25, 2.3, 4.8, 0.8, "5 / 5", size=40, bold=True, color=BLUE)
 text(s, 1.25, 3.25, 4.9, 1.0, "次采样均满足\n总数 = 待运 + 在途 + 已运抵", size=14, color=DARK, spacing=1.4)
 
 rect(s, 6.9, 2.0, 5.5, 2.5, fill=LIGHT)
 text(s, 7.25, 2.3, 4.9, 0.8, "540 → 110 ms", size=32, bold=True, color=BLUE)
-text(s, 7.25, 3.25, 4.9, 1.0, "50 辆车，每轮计算耗时\n（整轮合并事务后）", size=14, color=DARK, spacing=1.4)
+text(s, 7.25, 3.25, 4.9, 1.0, "压力测试 50 辆 / 当前演示 10 辆\n每轮计算耗时（整轮合并事务后）", size=13, color=DARK, spacing=1.4)
 
 text(s, 0.9, 4.95, 11.5, 0.4, "接口 /sim/state 响应 30~60ms  ·  前端 1 秒轮询无压力",
      size=14, color=GRAY, align=PP_ALIGN.CENTER)
 
 # 8 现场演示
-s = new_slide(prs, "现场演示", 8)
+s = new_slide(prs, "现场演示", 9)
 steps = [
     ("1", "车辆状态与概率转移"),
     ("2", "拐弯时贴着道路走"),
@@ -356,7 +416,7 @@ for num, label in steps:
 text(s, 0.9, 6.1, 11.5, 0.4, "如网络异常，立刻切换录屏兜底", size=13, color=GRAY)
 
 # 9 总结
-s = new_slide(prs, "总结", 9)
+s = new_slide(prs, "总结", 10)
 items = [
     ("概率状态机", "车辆行为不再写死，能体现随机波动"),
     ("真实路网", "工厂与路线来自真实数据，轨迹可信"),
@@ -374,7 +434,7 @@ text(s, 0.9, 5.7, 11.5, 0.6,
      "车辆与任务的匹配算法仍较简单、参数缺少系统实验 → 下一步补匹配度打分与敏感性分析",
      size=14, color=GRAY)
 
-out = os.path.join(BASE, sys.argv[1] if len(sys.argv) > 1 else "答辩_交通管理仿真系统.pptx")
+out = os.path.join(os.path.dirname(BASE), sys.argv[1] if len(sys.argv) > 1 else "答辩_交通管理仿真系统.pptx")
 prs.save(out)
 print("saved:", out)
 print("slides:", len(prs.slides))
