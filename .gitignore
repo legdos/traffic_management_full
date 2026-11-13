@@ -1,4 +1,4 @@
-# 构建产物
+﻿# 构建产物
 traffic_management_backend/target/
 traffic_management_backend/src/main/resources/static/
 traffic_management_frontend/traffic-vue/dist/
@@ -17,3 +17,9 @@ backup/
 
 # Office 打开文档时生成的临时锁文件
 ~$*
+
+# 课程提供的材料与临时目录
+软件工程大作业/SE3.*.pptx
+软件工程大作业/大作业要求2026.docx
+.tmp-sumo/
+
